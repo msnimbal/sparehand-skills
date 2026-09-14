@@ -1,0 +1,33 @@
+{
+  "name": "sparehand",
+  "version": "0.1.0",
+  "description": "Skills for consulting and client delivery work, from SpareHand AI.",
+  "owner": {
+    "name": "SpareHand AI"
+  },
+  "plugins": [
+    {
+      "name": "requirements-to-proposal",
+      "displayName": "Requirements to Proposal",
+      "description": "Turn raw client requirements — meeting notes, chat threads, voice recordings, emails, documents — into a scope document, a PDF, and matching CRM records that stay in sync through every revision.",
+      "version": "0.1.0",
+      "source": "./plugins/requirements-to-proposal",
+      "author": {
+        "name": "SpareHand AI"
+      },
+      "homepage": "https://github.com/msnimbal/sparehand-skills/tree/main/plugins/requirements-to-proposal",
+      "repository": "https://github.com/msnimbal/sparehand-skills",
+      "license": "MIT",
+      "category": "productivity",
+      "keywords": [
+        "proposal",
+        "scope-of-work",
+        "requirements",
+        "discovery",
+        "crm",
+        "consulting"
+      ],
+      "strict": true
+    }
+  ]
+}
