@@ -17,6 +17,7 @@ import { readdirSync, statSync } from "fs";
 import { extname, join, relative, resolve, basename, sep } from "path";
 import { arg, flag, die, writeJSON, probe, ffmpegAvailable } from "./lib/util.mjs";
 import { PLACEMENTS, fitness } from "./lib/placements.mjs";
+import { readProvenance, worstSeverity } from "./lib/provenance.mjs";
 
 const IMAGE = new Set([".jpg", ".jpeg", ".png", ".webp", ".heic", ".tif", ".tiff", ".bmp"]);
 const VIDEO = new Set([".mp4", ".mov", ".m4v", ".webm", ".avi", ".mkv"]);
@@ -171,6 +172,10 @@ for (const full of files) {
     for (const p of Object.keys(PLACEMENTS)) scores[p] = fitness(dims.w, dims.h, p);
   }
 
+  // Measure what you can, demand what you can't: everything above was read off
+  // the file, and this is the part only a note can supply.
+  const prov = readProvenance(full, { kind, allFiles: files });
+
   const asset = {
     file: rel,
     path: full,
@@ -183,6 +188,11 @@ for (const full of files) {
     finishedReason: finished,
     resolutionIndependent: kind === "vector",
     fitness: scores,
+    provenance: prov.data,
+    provenanceProblems: prov.problems,
+    provenanceSeverity: worstSeverity(prov.problems),
+    // plan.mjs must not route to an asset we cannot prove we may use.
+    unusable: prov.problems.some((x) => x.severity === "error"),
   };
 
   if (finished && !flag("include-finished")) skipped.push(asset);
@@ -211,6 +221,7 @@ const inventory = {
     byKind: usable.reduce((m, a) => ((m[a.kind] = (m[a.kind] || 0) + 1), m), {}),
     excludedAsFinished: skipped.length,
     supersededByVector: assets.length - usable.length,
+    unusableProvenance: usable.filter((a) => a.unusable).length,
   },
   assets: usable,
   excluded: skipped.map((a) => ({ file: a.file, reason: a.finishedReason })),
@@ -249,4 +260,27 @@ if (skipped.length) {
   console.log("  Pass --include-finished to keep them.");
 }
 
+const flagged = usable.filter((a) => a.provenanceProblems.length);
+const blocked = flagged.filter((a) => a.unusable);
+
+if (flagged.length) {
+  console.log(`\nProvenance — ${blocked.length} blocking, ${flagged.length - blocked.length} note(s):`);
+  for (const a of flagged) {
+    for (const prob of a.provenanceProblems) {
+      const tag = prob.severity === "error" ? "BLOCKED" : prob.severity === "warning" ? "warn" : "note";
+      console.log(`  [${tag}] ${a.file} — ${prob.message}`);
+    }
+  }
+}
+
 console.log(`\n${outPath}`);
+
+// Non-zero so a pipeline notices. Unlike a soft frame, an asset with no licence
+// is not a quality loss you can choose to accept at render time.
+if (blocked.length) {
+  console.error(
+    `\n${blocked.length} asset(s) cannot be used until their provenance is recorded. ` +
+      `plan.mjs will route around them.`,
+  );
+  process.exit(2);
+}

@@ -70,6 +70,42 @@ and the difference is where this goes wrong:
 Pass `--include-finished` to override. If the folder is empty or missing, say so and carry on —
 that routes to generated plates, which is a legitimate outcome and the common one.
 
+### Measure what you can, demand what you can't
+
+Size, duration and format are measured off the file with `ffprobe`, every time. A note that
+disagrees with the file is simply wrong, so trusting one can only introduce an error — and this is
+not a hypothetical. The first real folder this ran against had three stock images whose notes
+declared 3933x2622, 4000x6000 and 2912x5184, while the files on disk were 1280x853, 853x1280 and
+719x1280. The notes recorded the *original* dimensions; what had actually been downloaded was a
+preview. Trusted, all three would have cleared the fitness gate; measured, all three are too soft
+and get rejected.
+
+Where a file came from, what licence it carries, and whether it has been screened for Content ID
+are **not** measurable — nothing in the bytes records them — so they have to be written down, and
+these are the fields worth refusing over. Put a JSON note next to each acquired file, either
+`clip.mp4.json` or `clip.json`:
+
+```json
+{ "source": "<provider>", "page": "https://…/the-page-you-got-it-from",
+  "license": "<licence name>", "contentId": "clear" }
+```
+
+- `source`, `page`, `license` — required on anything acquired. Missing any one blocks the asset.
+- `contentId` — required on **audio** only: `clear`, `registered`, or `not-applicable`. Absence
+  means nobody looked, which is the state this field exists to make visible. `registered` is
+  refused outright rather than warned about: it *will* be claimed on Meta and YouTube.
+- Measurable fields are ignored if present, and reported so the mismatch is visible.
+
+**Your own footage needs no note.** A folder with no notes at all is a folder of things you shot,
+and is left alone. The rule triggers per folder: if a file's neighbours carry notes and it does not,
+that is a download nobody recorded, and it blocks — because the unrecorded one is the one that
+ships unattributed.
+
+`inventory.mjs` exits 2 when anything is blocked, and `plan.mjs` routes around those assets to a
+generated plate rather than rendering them and warning afterwards. Putting the question after the
+work is the same mistake as acquiring before asking: by then the frames exist and the pressure is
+to ship them.
+
 ## 3. Write `motion.json`
 
 ```json
@@ -217,6 +253,34 @@ the ad.
 A supplied track shorter than the cut is boomeranged before looping, so the wrap is inaudible rather
 than a click every few seconds.
 
+## Fetching stock, when a provider is connected
+
+Nothing in this skill downloads anything. Like the paid generators below, acquisition is something
+**you** do and then hand over as ordinary files — `scripts/` has no network code and names no
+vendor, so the same instructions work with whatever a given machine has available.
+
+If a stock provider is reachable — an MCP connector for one, or simply a public media URL you can
+fetch — and the business has no footage of its own that fits, stock is worth offering before a
+generated plate. It is free, so unlike a paid generator there is no cost to preflight. What it is
+not is unexamined: three things have to be true before a fetched file is usable.
+
+1. **Write the note.** Source, page, licence, and for audio a Content ID screen. See *Measure what
+   you can, demand what you can't* above. `inventory.mjs` enforces this, so a fetch without a note
+   is work you will redo.
+2. **Let it be measured.** Download the largest rendition the provider actually serves, then run
+   `inventory.mjs` and read the table. A provider's metadata often describes the original while the
+   download is a preview; the fitness verdict is the only answer that counts.
+3. **Check it is atmosphere, not evidence.** A stock clip of *someone else's* workshop is no more
+   this client's workshop than a generated one. See *Generate atmosphere, never evidence* — the rule
+   is about what an image claims, not about how it was made, so it applies to stock exactly as it
+   applies to a diffusion model.
+
+Audio deserves its own caution. Free stock music is where Content ID bites hardest — on at least
+one large library roughly 95% of tracks are registered, which is a coin-flip you lose most of the
+time, and the claim lands on the very platforms these ads run on. Screen the track page before
+downloading, not after assembling. A synthesised bed costs nothing and carries no claim at all,
+which is why it stays the default.
+
 ## Trying a paid generator, after the free one
 
 Tier 0 renders first, always. Only then is it worth asking whether paying would improve it.
@@ -291,6 +355,7 @@ scripts/assemble.mjs        timeline -> MP4s; the only module that knows ffmpeg'
 scripts/backgrounds.mjs     procedural plates, brand-exact and deterministic
 scripts/motion.mjs          warp, kenburns, boomerang loops, clip segments
 scripts/audio.mjs           the bed, the mux, loudness measurement
+scripts/lib/provenance.mjs  sidecar discovery + the fields no measurement recovers
 scripts/lib/placements.mjs  placement specs + the fitness rules
 scripts/lib/scrim.mjs       contrast maths and the measured scrim
 scripts/lib/png.mjs         a dependency-free PNG encoder
