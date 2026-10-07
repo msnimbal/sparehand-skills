@@ -170,10 +170,21 @@ function choosePool({ manifest, inventory, size, note }) {
     return { tier: 0, tierName: "local", kind: "given", pick: (i) => givenFile(files[i % files.length]) };
   }
 
+  // An asset whose licence or Content ID screen was never recorded is excluded
+  // here rather than at render time. Routing to it and warning afterwards would
+  // put the question after the work, which is the same mistake as acquiring
+  // before asking: by then the frames exist and the pressure is to ship them.
+  const unprovable = (inventory?.assets ?? []).filter((a) => a.unusable && !a.overlay);
   const fit = (inventory?.assets ?? []).filter(
-    (a) => !a.overlay && a.fitness?.[size] && USABLE.has(a.fitness[size].verdict),
+    (a) => !a.overlay && !a.unusable && a.fitness?.[size] && USABLE.has(a.fitness[size].verdict),
   );
 
+  if (unprovable.length) {
+    note(
+      `${size}: ignoring ${unprovable.length} asset(s) with no recorded provenance — ` +
+        unprovable.map((a) => basename(a.file)).join(", ") + ".",
+    );
+  }
   if (want === "assets" && !fit.length) {
     note(`${size}: asked for real assets but none clear the fitness gate here — falling back to a generated plate.`);
   }
@@ -194,7 +205,9 @@ function choosePool({ manifest, inventory, size, note }) {
     ? `manifest asked for "${want}"`
     : (inventory?.counts?.usable ?? 0) === 0
       ? "there are no source assets at all"
-      : `nothing in the asset folder clears the fitness gate at ${size}`;
+      : unprovable.length && !fit.length
+        ? `the only candidate assets have no recorded provenance`
+        : `nothing in the asset folder clears the fitness gate at ${size}`;
   note(`${size}: generating a "${gen}" plate because ${reason}.`);
   return {
     tier: 0, tierName: "local", kind: "generated",
